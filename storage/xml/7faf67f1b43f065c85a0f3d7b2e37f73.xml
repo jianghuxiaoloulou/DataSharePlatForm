@@ -1,0 +1,180 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ClinicalDocument xmlns="urn:h17-org:v3" xmlns:mif="urn:h17-org:v3/mif" xmlns:xsi="http://www.w3.org/2001/XMLSchema-nstance" xsi:schemaLocation="urn:h17-org:v3..\sdschemas\SDA.xsd">
+    <realmCode code="CN"/>
+    <typeId root="2.16.840.1.113883.1.3" extension="POCD_MT000040"/>
+    <templateId root="2.16.156.10011.2.1.1.26"/>
+    <id root="2.16.156.10011.1.1" extension="2.25.129025010376534136143545451206741650035"/>
+    <code code="C0006" codeSystem="2.16.156.10011.2.4" codeSystemName="卫生信息共享文档编码体系"/>
+    <Title>检查报告</Title>
+    <effectiveTime value="20211122100004"/>
+    <confidentialityCode code="N" codeSystem="2.16.840.1.113883.5.25" codeSystemName="Confidentiality" displayName="保密级别代码表"/>
+    <languageCode code="zh-CN"/>
+    <setId/>
+    <versionNumber/>
+    <recordTarget typeCode="RCT" contextControlCode="OP">
+        <patientRole classCode="PAT">
+            <id root="2.16.156.10011.1.11" extension="10516503"/>
+            <id root="2.16.156.10011.1.12" extension="10516503"/>
+            <id root="2.16.156.10011.1.32" extension="CTZY5546738"/>
+            <id root="2.16.156.10011.1.24" extension="08116014"/>
+            <patientType>
+                <patienttypeCode code="2" codeSystem="2.16.156.10011.2.3.1.271" codeSystemName="患者类型代码表" displayName="急诊"/>
+            </patientType>
+            <telecom value="13952342829"/>
+            <patient classCode="PSN" determinerCode="INSTANCE">
+                <id root="2.16.156.10011.1.3" extension="320831196807182424"/>
+                <name>杨发红</name>
+                <administrativeGenderCode code="2" codeSystem="2.16.156.10011.2.3.3.4" codeSystemName="女性"/>
+                <birthTime value="19680718"/>
+            </patient>
+        </patientRole>
+    </recordTarget>
+    <author typeCode="AUT" contextControlCode="OP">
+        <time value="20211122100004"/>
+        <assignedAuthor classCode="ASSIGNED">
+            <id root="2.16.156.10011.1.7" extension=""/>
+            <code displayName="报告医生"/>
+            <assignedPerson>
+                <name>韩汝昆</name>
+            </assignedPerson>
+        </assignedAuthor>
+    </author>
+    <custodian typeCode="CST">
+        <assignedCustodian classCode="ASSIGNED">
+            <representedCustodianOrganization classCode="ORG" determinerCode="INSTANCE">
+                <id root="16.156.10011.1.5" extension="21916626N33010317A1002"/>
+                <name>树兰（杭州）医院</name>
+            </representedCustodianOrganization>
+        </assignedCustodian>
+    </custodian>
+    <legalAuthenticator>
+        <time value="20211122100004"/>
+        <signatureCode/>
+        <assignedEntity>
+            <id root="2.16.156.10011.1.4" extension=""/>
+            <code displayName="审核医生"/>
+            <assignedPerson classCode="PSN" determnerCode="INSTANCE">
+                <name>陈瑶</name>
+            </assignedPerson>
+        </assignedEntity>
+    </legalAuthenticator>
+    <authenticator>
+        <time value="20211122100004"/>
+        <signatureCode/>
+        <assignedEntity>
+            <id root="2.16.156.10011.1.4" extension=""/>
+            <code displayName="检查技师"/>
+            <assignedPerson classCode="PSN" determnerCode="INSTANCE">
+                <name/>
+            </assignedPerson>
+        </assignedEntity>
+    </authenticator>
+    <participant typeCode="PRF">
+        <associatedEntity classCode="ASSIGNED">
+            <scopingOrganization>
+                <id root="2.16.156.10011.1.26" extension=""/>
+                <name>重症医学科(肝移植)</name>
+                <asOrganizationPartOf>
+                    <wholeOrganization>
+                        <id root="2.16.156.10011.1.5" extension="21916626N33010317A1002"/>
+                        <name>树兰（杭州）医院</name>
+                    </wholeOrganization>
+                </asOrganizationPartOf>
+            </scopingOrganization>
+        </associatedEntity>
+    </participant>
+    <relatedDocument typeCode="RPLC">
+        <parentDocument>
+            <id/>
+            <setId/>
+            <versionNumber/>
+        </parentDocument>
+    </relatedDocument>
+    <componentOf>
+        <encompassingEncounter>
+            <effectiveTime/>
+            <location>
+                <healthCareFacility>
+                    <serviceProviderOrganization>
+                        <asOrganizationPartOf classCode="PART">
+                            <wholeOrganization classCode="ORG" determinerCode="INSTANCE">
+                                <id root="2.16.156.10011.1.22" extension="B03"/>
+                            </wholeOrganization>
+                        </asOrganizationPartOf>
+                    </serviceProviderOrganization>
+                </healthCareFacility>
+            </location>
+        </encompassingEncounter>
+    </componentOf>
+    <component>
+        <structuredBody>
+            <component>
+                <section>
+                    <code code="29545-1" displayName="PHYSICAL EXAMINATION" codeSystem="2.16.840.1.113883.6.1" codeSystemName="LOINC"/>
+                    <text/>
+                    <entry>
+                        <deviceModel>GE5800</deviceModel>
+                        <deviceName>64排CT</deviceName>
+                        <registerDate>20211122100004</registerDate>
+                        <bodyAlias>胸部</bodyAlias>
+                    </entry>
+                    <entry>
+                        <observation classCode="OBS" moodCode="EVN">
+                            <code code="DE04.30.018.00" codeSystem="2.16.156.1001l.2.2.1" codeSystemName="卫生信息数据元目录" displayName="检查类别"/>
+                            <value xsi:type="ST">CT</value>
+                        </observation>
+                    </entry>
+                    <entry>
+                        <organizer classCode="CLUSTER" moodCode="EVN">
+                            <statusCode/>
+                            <component>
+                                <observation classCode="OBS" moodCode="EVN">
+                                    <code code="DE04.30.020.00" codeSystem="2.16.156.10011.2.2.1" codeSystemName="卫生信息数据元目录" displayName="检查项目代码"/>
+                                    <effectiveTime value="20211122100004"/>
+                                    <value xsi:type="ST">CT肺部平扫</value>
+                                </observation>
+                            </component>
+                        </organizer>
+                    </entry>
+                </section>
+            </component>
+            <component>
+                <section>
+                    <code displayName="检查报告"/>
+                    <text/>
+                    <entry>
+                        <observation classCode="OBS" moodCode="EVN">
+                            <code code="DE04.50.131.00" codeSystem="2.16.156.10011.2.2.1" codeSystemName="卫生信息数据元目录" displayName="检查报告结果-客观所见"/>
+                            <value xsi:type="ST">两肺见多发斑片状稍高密度影，边缘模糊，小叶间隔增厚，局部呈网格样改，两侧胸腔见液性密度影。右侧胸腔引流管留置。
+气管插管。
+气管插管、消化道置管。右路深静脉置管。
+未见明显纵隔气肿、占位；
+未见明显心脏、大血管形态改变，未见明显心包积液；
+（所示肋骨）未见明显肋骨错位性骨折。</value>
+                        </observation>
+                    </entry>
+                    <entry>
+                        <observation classCode="OBS" moodCode="EVN">
+                            <code code="DE04.50.132.00" codeSystem="2.16.156.10011.2.2.1" codeSystemName="卫生信息数据元目录" displayName="检查报告结果-主观提示"/>
+                            <value xsi:type="ST">两肺炎症，两侧胸腔积液，对照2021-11-15CT，明显好转。
+附见：肝移植术后改变。
+（本急诊报告仅提供急诊相关的影像描述和诊断，供急诊医生处理急症时参考）</value>
+                        </observation>
+                    </entry>
+                    <entry>
+                        <observation classCode="OBS" moodCode="EVN">
+                            <code code="DE08.10.013.00" codeSystem="2.16.156.10011.2.2.1" codeSystemName="卫生信息数据元目录" displayName="检查报告机构名称"/>
+                            <value xsi:type="ST">树兰（杭州）医院</value>
+                        </observation>
+                    </entry>
+                    <entry>
+                        <observation classCode="OBS" moodCode="EVN">
+                            <code code="DE06.00.179.00" codeSystem="2.16.156.10011.2.2.1" codeSystemName="卫生信息数据元目录" displayName="检查报告备注"/>
+                            <value xsi:type="ST"/>
+                        </observation>
+                    </entry>
+                </section>
+            </component>
+        </structuredBody>
+    </component>
+</ClinicalDocument>

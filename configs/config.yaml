@@ -1,0 +1,43 @@
+﻿General:
+  LogSavePath: storage/logs
+  LogFileName: log
+  LogFileExt: .log
+  LogMaxSize: 60
+  LogMaxAge: 7
+  MaxThreads: 100
+  # 定时任务规则：秒/分/时/日/月/星期（cron）
+  # 每天0-23时每隔10秒执行一次任务
+  CronSpec: "*/10 * 0-23 * * ?"
+Database:
+  # 杭州树兰医院：espacs:espacs@2017@tcp(10.20.32.212:31967)/espacs?charset=utf8
+  DBConn: espacs:espacs@2017@tcp(10.20.32.212:31967)/espacs?charset=utf8
+  # DBConn: hrp:asdf@123@tcp(10.110.20.133:30664)/espacs?charset=utf8  
+  DBType: mysql
+  MaxIdleConns: 100
+  MaxOpenConns: 100
+  MaxLifetime: 60
+
+Object:
+  # 树兰医院检验检查互认平台
+  # 树兰医院域控代码
+  Object_InteractionId: 1.2.860.330100.01.14
+  # 机构名称：树兰（杭州）医院
+  Object_OrganizationName: 树兰（杭州）医院
+  # 22位机构编码：21916626N33010317A1002
+  Object_OrganizationCode: 21916626N33010317A1002
+  # RetrieveAETitle
+  Object_RetrieveAETitle: ZJSLHZYYPACS
+  # 密钥：BU9VZ52FHGQ7NKPY8TRW3JDAMS6EXC4
+  Object_OrganizationAK: BU9VZ52FHGQ7NKPY8TRW3JDAMS6EXC4
+  # PIX 服务 注册患者基本信息
+  Object_PIX: http://192.26.51.9:8083/PixService.svc
+  # 集中存储库 注册检查信息/影像清单
+  Object_CentralizedStorageID: 1.3.6.1.4.1.330100.01.100
+  Object_CentralizedStorage: http://192.26.51.11:8086/DocRepositoryService.svc
+
+  # 开始上传的时间
+  Start_Time: 2021-12-01 00:00:00
+  # 每次获取的任务数
+  Object_MaxTasks: 100
+  # 重复操作次数
+  Object_Count: 3
