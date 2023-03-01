@@ -49,7 +49,7 @@ type ReportInfo struct {
 	audit_time            sql.NullString // 审核时间
 	finding               sql.NullString // 检查报告结果-客观所见
 	conclusion            sql.NullString // 检查报告结果-主观提示
-	status                sql.NullString //检查阳性标记
+	status                sql.NullString // 检查阳性标记
 }
 
 func NewDBEngine(databaseSetting *setting.DatabaseSettingS) (*sql.DB, error) {

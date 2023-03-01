@@ -32,12 +32,12 @@ func Work(obj global.ObjectData) {
 	global.Logger.Info("***1.注册患者基本信息***")
 	if !RegisterBasicInfo(baseInfo) {
 		// 注册失败 补偿操作
-		if !ReDo(obj) {
-			//补偿操作失败 更新platform_share_info status = 1
-			global.Logger.Error("***注册患者基本信息失败***")
-			model.UpdateStatus(obj.Uid_Enc, 1)
-			return
-		}
+		// if !ReDo(obj) {
+		//补偿操作失败 更新platform_share_info status = 1
+		global.Logger.Error("***注册患者基本信息失败***")
+		model.UpdateStatus(obj.Uid_Enc, 1)
+		return
+		//}
 	}
 	// 2.生成标准的检查报告CDA文档
 	// 获取报告信息

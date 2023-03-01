@@ -206,17 +206,31 @@ func GetReportInfo(uidenc string) global.PatientReportInfo {
 	}
 
 	// 2022/08/16修改 增加互认项目，多个以";"间隔
-	check_items := key.check_items.String
-	if check_items != "" {
-		check_items = strings.Replace(check_items, ",", ";", -1)
-		check_items = strings.Replace(check_items, "|", ";", -1)
+	check_item := key.check_items.String
+	if check_item != "" {
+		check_item = strings.Replace(check_item, ",", ";", -1)
+		check_item = strings.Replace(check_item, "|", ";", -1)
 	}
 
-	check_items_code := key.check_items_code.String
-	if check_items_code != "" {
-		check_items_code = strings.Replace(check_items_code, ",", ";", -1)
-		check_items_code = strings.Replace(check_items_code, "|", ";", -1)
+	// 增加互认项目字典表
+	check_items_str := strings.Split(check_item, ";")
+	check_items_len := len(check_items_str)
+	var check_items_code, check_items string
+	// 通过his 检查项目获取互认标准检查项目
+	for i := 0; i < check_items_len; i++ {
+		if i > 0 {
+			check_items_code += ";"
+			check_items += ";"
+		}
+		check_items_code, check_items = GetCheckItem(check_items_str[i])
 	}
+	global.Logger.Info("互认标准项目编码code: ", check_items_code, " name: ", check_items)
+
+	// check_items_code := key.check_items_code.String
+	// if check_items_code != "" {
+	// 	check_items_code = strings.Replace(check_items_code, ",", ";", -1)
+	// 	check_items_code = strings.Replace(check_items_code, "|", ";", -1)
+	// }
 
 	if !key.check_doctor.Valid {
 		key.check_doctor.String = key.audit_doctor.String
@@ -299,4 +313,17 @@ func GetPDFFilePath(uidenc string) string {
 		filename = "\\\\" + ip + "\\" + s_virtual_dir + filename
 	}
 	return filename
+}
+
+// 获取检查项目
+func GetCheckItem(checkItem string) (code, name string) {
+	global.Logger.Info("***获取互认检查项目***")
+	sql := `SELECT dic.standard_check_item,dic.standard_check_item_code FROM dict_checkitem dic
+	WHERE dic.pacs_check_item = ?;`
+	row := global.ReadDBEngine.QueryRow(sql, checkItem)
+	if err := row.Scan(&name, &code); err != nil {
+		global.Logger.Error(err)
+		return
+	}
+	return
 }
