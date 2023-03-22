@@ -8,12 +8,23 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 
 	"github.com/beevik/etree"
 	uuid "github.com/satori/go.uuid"
 )
 
+func Work(obj *global.ObjectData) {
+	switch global.ObjectSetting.Object_SelectPlatForm {
+	case global.PlatFormLaiDa:
+		PlatFormLaiDaWork(obj)
+	case global.PlatFormMingTian:
+		PlatFormMingTianWork(obj)
+	}
+}
+
+// 莱达平台
 // 认证获取的数据
 // 1.注册患者基本信息
 // 2.生成标准的检查报告CDA文档
@@ -22,7 +33,7 @@ import (
 // 5.将检查报告信息中的关键数据进行CA签名(省里的标准，杭州市没有买CA暂时不实现)
 // 6.将文件base64编码
 // 7.将生成的检查报告CDA文档和影像清单KOS文档注册至省影像云平台存储库服务，在省影像云平台中存储注册的文档并形成检查/影像主索引。
-func Work(obj global.ObjectData) {
+func PlatFormLaiDaWork(obj *global.ObjectData) {
 	// 将认证的数据插入数据库
 	model.InsertData(obj.Uid_Enc, obj.Report_update_time)
 	// 获取患者基本信息
@@ -114,7 +125,7 @@ func Work(obj global.ObjectData) {
 	// pdffilleid := uuid.NewV4()
 
 	DocInfo := global.DocInfo{
-		Object:    obj,
+		Object:    *obj,
 		CDA:       CADInfo,
 		CDAFileID: uuid.NewV4().String(),
 		CDAData:   baseCDA,
@@ -134,6 +145,67 @@ func Work(obj global.ObjectData) {
 	}
 	os.Remove(cadfile)
 	os.Remove(destkos)
+}
+
+// 明天医网平台
+// 认证获取的数据
+// 1.获取组装患者信息
+// 2.获取报告信息
+// 3.需要报告PDF文档
+// 4.将文件base64编码
+// 5.注册患者检查信息
+func PlatFormMingTianWork(obj *global.ObjectData) {
+	// 将认证的数据插入数据库
+	model.InsertData(obj.Uid_Enc, obj.Report_update_time)
+	// 1.获取患者基本信息
+	baseInfo := model.GetBasicInfo(obj.Uid_Enc, obj.Report_update_time)
+	global.Logger.Debug("***患者基本信息***", baseInfo)
+	// 2.获取报告信息
+	reportInfo := model.GetReportInfo(obj.Uid_Enc)
+	CADInfo := global.CDAInfo{
+		BPInfo: baseInfo,
+		RInfo:  reportInfo,
+	}
+	// 4.获取PDF文件路径
+	pdffile := model.GetPDFFilePath(obj.Uid_Enc)
+	global.Logger.Info("***PDF文件路径***", pdffile)
+	// 文件Base64编码
+	basePDF := general.File2Base64(pdffile)
+
+	DocInfo := global.DocInfo{
+		Object:    *obj,
+		CDA:       CADInfo,
+		CDAFileID: "",
+		CDAData:   "",
+		KOSFileID: "",
+		KOSData:   "",
+		PDFFileID: "",
+		PDFData:   basePDF,
+	}
+	global.Logger.Info(DocInfo)
+
+	reqBody, _ := WritePatientRegistryAddXML_MingTian(DocInfo)
+	soapResult := CallSoap11(global.ObjectSetting.Object_ExamInfoWithFile, reqBody)
+
+	global.Logger.Info("获取平台返回结果：soapResult: ", soapResult)
+
+	soapResult = strings.ReplaceAll(soapResult, "&lt;", "<")
+	soapResult = strings.ReplaceAll(soapResult, "&gt;", ">")
+	soapResult = strings.ReplaceAll(soapResult, "&#xD;", "\n")
+
+	doc := etree.NewDocument()
+	if err := doc.ReadFromString(soapResult); err != nil {
+		global.Logger.Error("Read SoapResult ", err)
+	}
+
+	ResultCode := doc.FindElement("./s:Envelope/s:Body/SaveExamInfoExXmlResponse/SaveExamInfoExXmlResult/ModelResultOfGuid/ResultCode")
+	global.Logger.Info("获取平台返回结果：ResultCode: ", ResultCode.Text())
+	if "Success" == ResultCode.Text() {
+		// 注册成功，更新platform_share_info status = 0
+		model.UpdateStatus(obj.Uid_Enc, 0)
+	} else {
+		model.UpdateStatus(obj.Uid_Enc, 1)
+	}
 }
 
 // 1.注册患者基本信息
@@ -234,6 +306,39 @@ func CallSoap12(url, reqBody string) string {
 		global.Logger.Error("ioutil ReadAll err:", err)
 		return ""
 	}
+	return string(data)
+}
+
+// 调用通信SOAP1.1
+func CallSoap11(url, reqBody string) string {
+	request, err := http.NewRequest(http.MethodPost, url, strings.NewReader(reqBody))
+	if err != nil {
+		global.Logger.Error("NewRequest err: ", err, url)
+	}
+	// 设置AK
+	request.Header.Set("SOAPAction", global.ObjectSetting.Object_SOAPAction)
+	request.Header.Set("Content-Type", "text/xml")
+	request.Header.Set("Connection", "close")
+
+	client := &http.Client{}
+	resp, err := client.Do(request)
+	if err != nil {
+		global.Logger.Error("Do Request got err: ", err)
+	}
+	defer resp.Body.Close()
+
+	// return status
+	if http.StatusOK != resp.StatusCode {
+		global.Logger.Error("WebService soap1.1 request fail, status: %s\n", resp.StatusCode)
+		return ""
+	}
+
+	data, err := ioutil.ReadAll(resp.Body)
+	if nil != err {
+		global.Logger.Error("ioutil ReadAll err:", err)
+		return ""
+	}
+
 	return string(data)
 }
 
@@ -1434,5 +1539,321 @@ func WriteProvideAndRegisterDocumentSetXML(obj global.DocInfo) (reqbody string, 
 	//doc.WriteTo(os.Stdout)
 	// doc.WriteToFile(xmlfile)
 	// doc.WriteToFile("./storage/xml/CDAKOS.xml")
+	return doc.WriteToString()
+}
+
+// 2023/03/01增加对接明天医网互认检查数据接口
+// 明天医网检查数据上传
+func WritePatientRegistryAddXML_MingTian(obj global.DocInfo) (reqbody string, err error) {
+
+	mExamInfoWithFile, _ := CreateCDATAData(obj)
+
+	doc := etree.NewDocument()
+	// doc.CreateProcInst("xml", `version="1.0" encoding="UTF-8"`)
+	// doc.CreateProcInst("xml-stylesheet", `type="text/xsl" href="style.xsl"`)
+	s_Envelope := doc.CreateElement("soapenv:Envelope")
+	s_Envelope.CreateAttr("xmlns:soapenv", "http://schemas.xmlsoap.org/soap/envelope/")
+	s_Envelope.CreateAttr("xmlns:bus", "http://www.tomtaw.com.cn/IMCIS/BusinessService")
+	s_Header := s_Envelope.CreateElement("soapenv:Header")
+	s_Header.SetText("")
+	s_Body := s_Envelope.CreateElement("soapenv:Body")
+	bus_SaveExamInfoExXml := s_Body.CreateElement("bus:SaveExamInfoExXml")
+	bus_SaveExamInfoExXml.CreateComment("Optional:")
+	bus_userUID := bus_SaveExamInfoExXml.CreateElement("bus:userUID")
+	bus_userUID.SetText(global.ObjectSetting.Object_UserUID)
+	bus_SaveExamInfoExXml.CreateComment("Optional:")
+	bus_userToken := bus_SaveExamInfoExXml.CreateElement("bus:userToken")
+	bus_userToken.SetText("")
+	bus_SaveExamInfoExXml.CreateComment("Optional:")
+	bus_model := bus_SaveExamInfoExXml.CreateElement("bus:model")
+	bus_model.SetCData(mExamInfoWithFile)
+	// xml 缩进q
+	doc.Indent(4)
+	// doc.WriteTo(os.Stdout)
+	doc.WriteToFile("./storage/xml/PatientRegistryAdd_MingTian.xml")
+	//return doc.WriteToBytes()
+	return doc.WriteToString()
+}
+
+func CreateCDATAData(obj global.DocInfo) (reqbody string, err error) {
+	doc := etree.NewDocument()
+	ExamInfoWithFile := doc.CreateElement("ExamInfoWithFile")
+	Patient := ExamInfoWithFile.CreateElement("Patient")
+	PatientID := Patient.CreateElement("PatientID")
+	PatientID.SetText(obj.CDA.BPInfo.PatientID)
+	PIDAssigningAuthority := Patient.CreateElement("PIDAssigningAuthority")
+	PIDAssigningAuthority.SetText("RIS")
+	Name := Patient.CreateElement("Name")
+	Name.SetText(obj.CDA.BPInfo.Name)
+	NameSpell := Patient.CreateElement("NameSpell")
+	NameSpell.SetText(obj.CDA.BPInfo.NamePY)
+	Sex := Patient.CreateElement("Sex")
+	Sex.SetText(obj.CDA.BPInfo.Gender)
+	BirthDate := Patient.CreateElement("BirthDate")
+	BirthDate.SetText(obj.CDA.BPInfo.BirthTime)
+	BirthPlace := Patient.CreateElement("BirthPlace")
+	BirthPlace.SetText("")
+	Nation := Patient.CreateElement("Nation")
+	Nation.SetText("")
+	Citizenship := Patient.CreateElement("Citizenship")
+	Citizenship.SetText("")
+	MaritalStatus := Patient.CreateElement("MaritalStatus")
+	MaritalStatus.SetText("")
+	IdentityType := Patient.CreateElement("IdentityType")
+	IdentityType.SetText("1身份证证")
+	IDCardNO := Patient.CreateElement("IDCardNO")
+	IDCardNO.SetText(obj.CDA.BPInfo.IDNumber)
+	HealthCardNO := Patient.CreateElement("HealthCardNO")
+	HealthCardNO.SetText("")
+	ContactPhoneNO := Patient.CreateElement("ContactPhoneNO")
+	ContactPhoneNO.SetText(obj.CDA.BPInfo.Telecom)
+	HomePhoneNO := Patient.CreateElement("HomePhoneNO")
+	HomePhoneNO.SetText("")
+	BusinessPhoneNO := Patient.CreateElement("BusinessPhoneNO")
+	BusinessPhoneNO.SetText("")
+	Email := Patient.CreateElement("Email")
+	Email.SetText("")
+	AddressProvince := Patient.CreateElement("AddressProvince")
+	AddressProvince.SetText("")
+	AddressCity := Patient.CreateElement("AddressCity")
+	AddressCity.SetText("")
+	AddressDistrict := Patient.CreateElement("AddressDistrict")
+	AddressDistrict.SetText("")
+	AddressStreet := Patient.CreateElement("AddressStreet")
+	AddressStreet.SetText("")
+	AddressRoad := Patient.CreateElement("AddressRoad")
+	AddressRoad.SetText("")
+	AddressDetail := Patient.CreateElement("AddressDetail")
+	AddressDetail.SetText("")
+	Postalcode := Patient.CreateElement("Postalcode")
+	Postalcode.SetText("")
+	Occupation := Patient.CreateElement("Occupation")
+	Occupation.SetText("")
+	WorkUnit := Patient.CreateElement("WorkUnit")
+	WorkUnit.SetText("")
+	InsuranceType := Patient.CreateElement("InsuranceType")
+	InsuranceType.SetText("")
+	InsuranceID := Patient.CreateElement("InsuranceID")
+	InsuranceID.SetText("")
+
+	Visit := ExamInfoWithFile.CreateElement("Visit")
+	VisitID := Visit.CreateElement("VisitID")
+	VisitID.SetText(obj.CDA.BPInfo.ResidentHealthCardNumber)
+	AssigningAuthority := Visit.CreateElement("AssigningAuthority")
+	AssigningAuthority.SetText("PACS")
+	PatientClass := Visit.CreateElement("PatientClass")
+	PatientClass.SetText(obj.CDA.RInfo.PatientTypeName)
+	MedRecNO := Visit.CreateElement("MedRecNO")
+	MedRecNO.SetText(obj.CDA.RInfo.Clinic_Id)
+	OutPatientNO := Visit.CreateElement("OutPatientNO")
+	OutPatientNO.SetText("")
+	InPatientNO := Visit.CreateElement("InPatientNO")
+	InPatientNO.SetText("")
+	CardType := Visit.CreateElement("CardType")
+	CardType.SetText("0")
+	CardNO := Visit.CreateElement("CardNO")
+	CardNO.SetText(obj.CDA.BPInfo.ResidentHealthCardNumber)
+	Age := Visit.CreateElement("Age")
+	Age.SetText(strconv.Itoa(obj.CDA.BPInfo.Age))
+	AgeUnit := Visit.CreateElement("AgeUnit")
+	AgeUnit.SetText("岁")
+	DeptName := Visit.CreateElement("DeptName")
+	DeptName.SetText(obj.CDA.RInfo.DeviceCode)
+	PointOfCare := Visit.CreateElement("PointOfCare")
+	PointOfCare.SetText(obj.CDA.RInfo.PatientSection)
+	Bed := Visit.CreateElement("Bed")
+	Bed.SetText(obj.CDA.RInfo.SickbedIndex)
+
+	ObservationRequest := ExamInfoWithFile.CreateElement("ObservationRequest")
+	OrganizationID := ObservationRequest.CreateElement("OrganizationID")
+	OrganizationID.SetText(global.ObjectSetting.Object_OrganizationCode)
+	PlacerOrderNO := ObservationRequest.CreateElement("PlacerOrderNO")
+	PlacerOrderNO.SetText(obj.CDA.RInfo.HisSn)
+	PlacerAssigningAuthority := ObservationRequest.CreateElement("PlacerAssigningAuthority")
+	PlacerAssigningAuthority.SetText("HIS")
+	FillerOrderNO := ObservationRequest.CreateElement("FillerOrderNO")
+	FillerOrderNO.SetText(obj.CDA.RInfo.AccessionNumber)
+	FillerAssigningAuthority := ObservationRequest.CreateElement("FillerAssigningAuthority")
+	FillerAssigningAuthority.SetText("RIS")
+	AccessionNumber := ObservationRequest.CreateElement("AccessionNumber")
+	AccessionNumber.SetText(obj.CDA.RInfo.AccessionNumber)
+	ServiceID := ObservationRequest.CreateElement("ServiceID")
+	ServiceID.SetText(obj.CDA.RInfo.CheckItemsCode)
+	ServiceCodeScheme := ObservationRequest.CreateElement("ServiceCodeScheme")
+	ServiceCodeScheme.SetText("")
+	ServiceText := ObservationRequest.CreateElement("ServiceText")
+	ServiceText.SetText(obj.CDA.RInfo.CheckItems)
+	ServiceSectID := ObservationRequest.CreateElement("ServiceSectID")
+	ServiceSectID.SetText(obj.CDA.RInfo.ModalityName)
+	ProcedureID := ObservationRequest.CreateElement("ProcedureID")
+	ProcedureID.SetText(obj.CDA.RInfo.BodyPart)
+	ProcedureName := ObservationRequest.CreateElement("ProcedureName")
+	ProcedureName.SetText(obj.CDA.RInfo.BodyPart)
+	ProviderID := ObservationRequest.CreateElement("ProviderID")
+	ProviderID.SetText("")
+	ProviderName := ObservationRequest.CreateElement("ProviderName")
+	ProviderName.SetText(obj.CDA.RInfo.ApplyDoctorName)
+	InsurancePayments := ObservationRequest.CreateElement("InsurancePayments")
+	InsurancePayments.SetText("4582.00")
+	ProviderPhone := ObservationRequest.CreateElement("ProviderPhone")
+	ProviderPhone.SetText("")
+	RequestDeptID := ObservationRequest.CreateElement("RequestDeptID")
+	RequestDeptID.SetText("")
+	RequestDeptName := ObservationRequest.CreateElement("RequestDeptName")
+	RequestDeptName.SetText(obj.CDA.RInfo.ApplyDepartmentName)
+	RequestOrgID := ObservationRequest.CreateElement("RequestOrgID")
+	RequestOrgID.SetText(global.ObjectSetting.Object_OrganizationCode)
+	RequestOrgName := ObservationRequest.CreateElement("RequestOrgName")
+	RequestOrgName.SetText(global.ObjectSetting.Object_OrganizationName)
+	RequestedDate := ObservationRequest.CreateElement("RequestedDate")
+	RequestedDate.SetText(obj.CDA.RInfo.StudyTime)
+	Reason := ObservationRequest.CreateElement("Reason")
+	Reason.SetText("")
+	Attention := ObservationRequest.CreateElement("Attention")
+	Attention.SetText("")
+	Symptom := ObservationRequest.CreateElement("Symptom")
+	Symptom.SetText("")
+	ClinicDiagnosis := ObservationRequest.CreateElement("ClinicDiagnosis")
+	ClinicDiagnosis.SetText("")
+	RelevantClinicalInfo := ObservationRequest.CreateElement("RelevantClinicalInfo")
+	RelevantClinicalInfo.SetText("")
+	SpecimenID := ObservationRequest.CreateElement("SpecimenID")
+	SpecimenID.SetText("")
+	SpecimenName := ObservationRequest.CreateElement("SpecimenName")
+	SpecimenName.SetText("")
+	SpecimenType := ObservationRequest.CreateElement("SpecimenType")
+	SpecimenType.SetText("")
+	SpecimenSource := ObservationRequest.CreateElement("SpecimenSource")
+	SpecimenSource.SetText("")
+	CollectorID := ObservationRequest.CreateElement("CollectorID")
+	CollectorID.SetText("")
+	CollectorName := ObservationRequest.CreateElement("CollectorName")
+	CollectorName.SetText("")
+	CollectionDept := ObservationRequest.CreateElement("CollectionDept")
+	CollectionDept.SetText("")
+	CollectionMethod := ObservationRequest.CreateElement("CollectionMethod")
+	CollectionMethod.SetText("")
+	CollectionVolume := ObservationRequest.CreateElement("CollectionVolume")
+	CollectionVolume.SetText("")
+	SpecimenReceivedDate := ObservationRequest.CreateElement("SpecimenReceivedDate")
+	SpecimenReceivedDate.SetText("")
+	ResultStatus := ObservationRequest.CreateElement("ResultStatus")
+	ResultStatus.SetText("审核完成")
+	RegisterID := ObservationRequest.CreateElement("RegisterID")
+	RegisterID.SetText("ch")
+	RegisterName := ObservationRequest.CreateElement("RegisterName")
+	RegisterName.SetText("陈华")
+	RegTime := ObservationRequest.CreateElement("RegTime")
+	RegTime.SetText("")
+	ObservationDeptID := ObservationRequest.CreateElement("ObservationDeptID")
+	ObservationDeptID.SetText("0202")
+	ObservationDeptName := ObservationRequest.CreateElement("ObservationDeptName")
+	ObservationDeptName.SetText("放射科")
+	ObservationDate := ObservationRequest.CreateElement("ObservationDate")
+	ObservationDate.SetText(obj.CDA.RInfo.StudyTime)
+	ObservationLocation := ObservationRequest.CreateElement("ObservationLocation")
+	ObservationLocation.SetText(obj.CDA.RInfo.ApplyDepartmentName)
+	ObservationEquipmentID := ObservationRequest.CreateElement("ObservationEquipmentID")
+	ObservationEquipmentID.SetText("")
+	ObservationEquipment := ObservationRequest.CreateElement("ObservationEquipment")
+	ObservationEquipment.SetText("")
+	EquipmentModel := ObservationRequest.CreateElement("EquipmentModel")
+	EquipmentModel.SetText("")
+	ObservationMethod := ObservationRequest.CreateElement("ObservationMethod")
+	ObservationMethod.SetText(obj.CDA.RInfo.ModalityName)
+	StudyInstanceUID := ObservationRequest.CreateElement("StudyInstanceUID")
+	StudyInstanceUID.SetText(obj.CDA.RInfo.StudyInstanceUid)
+	TechnicianID := ObservationRequest.CreateElement("TechnicianID")
+	TechnicianID.SetText("")
+	TechnicianName := ObservationRequest.CreateElement("TechnicianName")
+	TechnicianName.SetText(obj.CDA.RInfo.CheckDoctor)
+	ResultAssistantID := ObservationRequest.CreateElement("ResultAssistantID")
+	ResultAssistantID.SetText("")
+	ResultAssistantName := ObservationRequest.CreateElement("ResultAssistantName")
+	ResultAssistantName.SetText(obj.CDA.RInfo.ReportDoctor)
+	ResultPrincipalID := ObservationRequest.CreateElement("ResultPrincipalID")
+	ResultPrincipalID.SetText("")
+	ResultPrincipalName := ObservationRequest.CreateElement("ResultPrincipalName")
+	ResultPrincipalName.SetText(obj.CDA.RInfo.AuditDoctor)
+	ResultReviseID := ObservationRequest.CreateElement("ResultReviseID")
+	ResultReviseID.SetText("")
+	ResultReviseName := ObservationRequest.CreateElement("ResultReviseName")
+	ResultReviseName.SetText(obj.CDA.RInfo.ReportDoctor)
+	PreliminaryDate := ObservationRequest.CreateElement("PreliminaryDate")
+	PreliminaryDate.SetText(obj.CDA.RInfo.ReportTime)
+	AuditDate := ObservationRequest.CreateElement("AuditDate")
+	AuditDate.SetText(obj.CDA.RInfo.AuditTime)
+	ReviseDate := ObservationRequest.CreateElement("ReviseDate")
+	ReviseDate.SetText(obj.CDA.RInfo.ReportTime)
+	StandardCode := ObservationRequest.CreateElement("StandardCode")
+	StandardCode.SetText(obj.CDA.RInfo.CheckItemsCode)
+	StandardCodeName := ObservationRequest.CreateElement("StandardCodeName")
+	StandardCodeName.SetText(obj.CDA.RInfo.CheckItems)
+	AbnormalFlags := ObservationRequest.CreateElement("AbnormalFlags")
+	AbnormalFlags.SetText(obj.CDA.RInfo.Status)
+	CriticalValue := ObservationRequest.CreateElement("CriticalValue")
+	CriticalValue.SetText("-")
+	InfectionName := ObservationRequest.CreateElement("InfectionName")
+	InfectionName.SetText("")
+	PrivacyLevel := ObservationRequest.CreateElement("PrivacyLevel")
+	PrivacyLevel.SetText("")
+	Charges := ObservationRequest.CreateElement("Charges")
+	Charges.SetText("")
+	Payments := ObservationRequest.CreateElement("Payments")
+	Payments.SetText("")
+	FilmCount := ObservationRequest.CreateElement("FilmCount")
+	FilmCount.SetText("")
+	FilmNeed := ObservationRequest.CreateElement("FilmNeed")
+	FilmNeed.SetText("")
+	HasImage := ObservationRequest.CreateElement("HasImage")
+	HasImage.SetText("1")
+	ImageLocation := ObservationRequest.CreateElement("ImageLocation")
+	ImageLocation.SetText("0")
+
+	ObservationSchedule := ExamInfoWithFile.CreateElement("ObservationSchedule")
+	ScheduleID := ObservationSchedule.CreateElement("ScheduleID")
+	ScheduleID.SetText("")
+	ScheduleResourceName := ObservationSchedule.CreateElement("ScheduleResourceName")
+	ScheduleResourceName.SetText("")
+	ScheduleStartDate := ObservationSchedule.CreateElement("ScheduleStartDate")
+	ScheduleStartDate.SetText("")
+	ScheduleEndDate := ObservationSchedule.CreateElement("ScheduleEndDate")
+	ScheduleEndDate.SetText("")
+	ScheduleNotice := ObservationSchedule.CreateElement("ScheduleNotice")
+	ScheduleNotice.SetText("")
+	ScheduleOperatorID := ObservationSchedule.CreateElement("ScheduleOperatorID")
+	ScheduleOperatorID.SetText("")
+	ScheduleOperatorName := ObservationSchedule.CreateElement("ScheduleOperatorName")
+	ScheduleOperatorName.SetText("")
+
+	ObservationResultList := ExamInfoWithFile.CreateElement("ObservationResultList")
+	ObservationResult := ObservationResultList.CreateElement("ObservationResult")
+	ObservationID := ObservationResult.CreateElement("ObservationID")
+	ObservationID.SetText("GDT")
+	ValueTitle := ObservationResult.CreateElement("ValueTitle")
+	ValueTitle.SetText("检查所见")
+	ValueText := ObservationResult.CreateElement("ValueText")
+	ValueText.SetText(obj.CDA.RInfo.Finding)
+
+	ObservationResult1 := ObservationResultList.CreateElement("ObservationResult")
+	ObservationID1 := ObservationResult1.CreateElement("ObservationID")
+	ObservationID1.SetText("IMP")
+	ValueTitle2 := ObservationResult1.CreateElement("ValueTitle")
+	ValueTitle2.SetText("检查诊断")
+	ValueText2 := ObservationResult1.CreateElement("ValueText")
+	ValueText2.SetText(obj.CDA.RInfo.Conclusion)
+	FileList := ExamInfoWithFile.CreateElement("FileList")
+	ExamFile := FileList.CreateElement("ExamFile")
+	FileType := ExamFile.CreateElement("FileType")
+	FileType.SetText("ExamResult")
+	FileFormat := ExamFile.CreateElement("FileFormat")
+	FileFormat.SetText("Pdf")
+	FileBytes := ExamFile.CreateElement("FileBytes")
+	FileBytes.SetText(obj.PDFData)
+	// xml 缩进q
+	doc.Indent(4)
+
+	doc.WriteToFile("./storage/xml/ExamInfoWithFile_CDATA.xml")
+
 	return doc.WriteToString()
 }

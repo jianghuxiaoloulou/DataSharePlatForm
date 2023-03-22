@@ -30,6 +30,11 @@ type ObjectSettingS struct {
 	Object_MaxTasks             int
 	Object_Count                int
 	Start_Time                  string
+	// 2023-03-07 增加明天医院互认
+	Object_SelectPlatForm   int
+	Object_UserUID          string
+	Object_ExamInfoWithFile string
+	Object_SOAPAction       string
 }
 
 func (s *Setting) ReadSection(k string, v interface{}) error {

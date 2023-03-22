@@ -14,7 +14,7 @@ import (
 // @description 与莱达对接检验检查结果
 // @termsOfService
 func main() {
-	global.Logger.Info("*******开始运行浙江省检验检查结果互认共享平台服务********")
+	global.Logger.Info("*******开始运行检验检查结果互认共享平台服务********")
 
 	global.ObjectDataChan = make(chan global.ObjectData)
 
@@ -35,6 +35,7 @@ func main() {
 	}()
 	// 后台获取需要处理的任务
 	global.RunStatus = false
+	// object.WritePatientRegistryAddXML_MingTian()
 
 	run()
 }
@@ -64,5 +65,5 @@ type Dosomething struct {
 func (d *Dosomething) Do() {
 	global.Logger.Info("正在处理的数据是：", d.key)
 	//处理获取的任务
-	object.Work(d.key)
+	object.Work(&d.key)
 }

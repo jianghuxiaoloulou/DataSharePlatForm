@@ -2,7 +2,9 @@ package model
 
 import (
 	"WowjoyProject/DataSharePlatForm/global"
+	"strconv"
 	"strings"
+	"time"
 )
 
 // 获取需要处理的数据
@@ -14,11 +16,13 @@ func AutoGetObjectData() {
 	global.RunStatus = true
 	global.Logger.Info("***开始获取需要上传互认平台的数据***")
 	// 互认数据只互认放射科的数据，只互认报告状态为已经审核的报告
+	// 增加延时10分钟上传数据
 	sql := `select r.uid_enc,r.update_time
 	from report r
 	left join platform_share_info psi ON r.uid_enc = psi.uid_enc
 	where psi.uid_enc is null
 	and r.report_status ='AUDITED' and r.uid_enc!='' and r.update_time > ?
+	and TIMESTAMPDIFF(MINUTE,r.update_time,NOW()) > 10
 	order by r.update_time DESC
 	limit ?;`
 	rows, err := global.ReadDBEngine.Query(sql, global.ObjectSetting.Start_Time, global.ObjectSetting.Object_MaxTasks)
@@ -97,22 +101,42 @@ func GetBasicInfo(uidenc, updatetime string) global.BasicPatientInfo {
 	updatetime = strings.Replace(updatetime, " ", "", -1)
 	brith := key.id_card.String[6:14]
 	gender := ""
-	switch key.sex_code.String {
-	case "MAN":
-		gender = "M"
-	case "FEMALE":
-		gender = "F"
-	case "FEMAIL":
-		gender = "F"
-	case "":
-		gender = "O"
+	switch global.ObjectSetting.Object_SelectPlatForm {
+	case global.PlatFormLaiDa:
+		switch key.sex_code.String {
+		case "MAN":
+			gender = "M"
+		case "FEMALE":
+			gender = "F"
+		case "FEMAIL":
+			gender = "F"
+		case "":
+			gender = "O"
+		}
+	case global.PlatFormMingTian:
+		switch key.sex_code.String {
+		case "MAN":
+			gender = "男"
+		case "FEMALE":
+			gender = "女"
+		case "FEMAIL":
+			gender = "未知"
+		case "":
+			gender = "未知"
+		}
 	}
+	now := time.Now()
+	now_year := now.Year()
+	idCard := key.id_card.String                 // 年
+	idcard_year, _ := strconv.Atoi(idCard[6:10]) // 年
+	age := now_year - idcard_year
 	obj = global.BasicPatientInfo{
 		OrganizationCode:         global.ObjectSetting.Object_OrganizationCode,
 		OrganizationName:         global.ObjectSetting.Object_OrganizationName,
 		Name:                     key.name.String,
 		NamePY:                   key.spell_name.String,
 		Gender:                   gender,
+		Age:                      age,
 		BirthTime:                brith,
 		Telecom:                  key.telephone.String,
 		StreetAddressLine:        key.address.String,
@@ -134,7 +158,7 @@ func GetReportInfo(uidenc string) global.PatientReportInfo {
 	r.report_doctor,r.report_time,r.audit_doctor,r.audit_time,r.finding,r.conclusion,r.status
 	from report r 
 	left join register_info ri on r.uid_enc = ri.uid_enc
-	left join register_order_info roi on r.uid_enc = roi.uid_enc
+	left join register_order_info roi on ri.register_uid_enc = roi.uid_enc
 	left join study s on r.uid_enc = s.uid_enc
 	left join register_info_relation rir on rir.register_uid_enc = r.uid_enc
 	where r.uid_enc = ?;`
@@ -164,28 +188,34 @@ func GetReportInfo(uidenc string) global.PatientReportInfo {
 		patienttypename = "其他"
 	}
 	modalityname := key.modality_name.String
-	switch modalityname {
-	case "X-Ray":
-		modalityname = "1"
-	case "CT":
-		modalityname = "3"
-	case "MR":
-		modalityname = "4"
-	case "DSA":
-		modalityname = "5"
-	case "US":
-		modalityname = "6"
-	case "ES":
-		modalityname = "7"
-	case "PA":
-		modalityname = "8"
-	case "NM":
-		modalityname = "9"
-	case "PET":
-		modalityname = "10"
-	default:
-		modalityname = "99"
+
+	switch global.ObjectSetting.Object_SelectPlatForm {
+	case global.PlatFormLaiDa:
+		switch modalityname {
+		case "X-Ray":
+			modalityname = "1"
+		case "CT":
+			modalityname = "3"
+		case "MR":
+			modalityname = "4"
+		case "DSA":
+			modalityname = "5"
+		case "US":
+			modalityname = "6"
+		case "ES":
+			modalityname = "7"
+		case "PA":
+			modalityname = "8"
+		case "NM":
+			modalityname = "9"
+		case "PET":
+			modalityname = "10"
+		default:
+			modalityname = "99"
+		}
+	case global.PlatFormMingTian:
 	}
+
 	studytime := key.study_time.String
 	if studytime != "" {
 		studytime = strings.Replace(studytime, "-", "", -1)

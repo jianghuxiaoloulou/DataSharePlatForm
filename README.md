@@ -86,4 +86,6 @@ go get -u github.com/juju/ratelimit@v1.0.1
 # git push -u origin master
 
 # 修改记录
+2023/03/22 增加明天医网平台互认接口
+2023/03/01 补提交修改莱达V1.0.0归档版本(莱达平台互认上线版本)
 2022/07/18 修改读写分离数据库

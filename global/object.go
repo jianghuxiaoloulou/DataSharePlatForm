@@ -1,5 +1,10 @@
 package global
 
+const (
+	PlatFormLaiDa    int = iota // 莱达互认平台
+	PlatFormMingTian            // 明天医网互认平台
+)
+
 type ObjectData struct {
 	Uid_Enc            string // 患者唯一ID
 	Report_update_time string
@@ -43,11 +48,12 @@ type BasicPatientInfo struct {
 	Name                     string //患者姓名
 	NamePY                   string //患者姓名拼音
 	Gender                   string //性别
+	Age                      int    //年龄
 	BirthTime                string //出生日期 格式：yyyyMMdd格式为20120426
 	Telecom                  string //联系电话
 	StreetAddressLine        string //地址
 	ResidentHealthCardNumber string //居民健康卡号
-	InteractionId            string // 病人所属医疗机构的域控代码
+	InteractionId            string //病人所属医疗机构的域控代码
 	IDNumber                 string //身份证号
 	PatientID                string //病人号，在域控ID下唯一
 	CreationTime             string //消息创建时间 格式为20190702152926
