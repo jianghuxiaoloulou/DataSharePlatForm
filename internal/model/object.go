@@ -194,6 +194,8 @@ func GetReportInfo(uidenc string) global.PatientReportInfo {
 		switch modalityname {
 		case "X-Ray":
 			modalityname = "1"
+		case "DR":
+			modalityname = "2"
 		case "CT":
 			modalityname = "3"
 		case "MR":
