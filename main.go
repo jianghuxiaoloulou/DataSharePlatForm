@@ -2,6 +2,7 @@ package main
 
 import (
 	"WowjoyProject/DataSharePlatForm/global"
+	initialize "WowjoyProject/DataSharePlatForm/internal/init"
 	"WowjoyProject/DataSharePlatForm/internal/model"
 	"WowjoyProject/DataSharePlatForm/pkg/object"
 	"WowjoyProject/DataSharePlatForm/pkg/workpattern"
@@ -14,6 +15,8 @@ import (
 // @description 与莱达对接检验检查结果
 // @termsOfService
 func main() {
+	initialize.InitSetup()
+
 	global.Logger.Info("*******开始运行检验检查结果互认共享平台服务********")
 
 	global.ObjectDataChan = make(chan global.ObjectData)

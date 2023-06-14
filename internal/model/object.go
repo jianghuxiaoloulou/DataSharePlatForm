@@ -2,6 +2,7 @@ package model
 
 import (
 	"WowjoyProject/DataSharePlatForm/global"
+	"errors"
 	"strconv"
 	"strings"
 	"time"
@@ -17,14 +18,23 @@ func AutoGetObjectData() {
 	global.Logger.Info("***开始获取需要上传互认平台的数据***")
 	// 互认数据只互认放射科的数据，只互认报告状态为已经审核的报告
 	// 增加延时10分钟上传数据
-	sql := `select r.uid_enc,r.update_time
+	sql := `select r.uid_enc,r.update_time,ri.register_uid_enc 
 	from report r
 	left join platform_share_info psi ON r.uid_enc = psi.uid_enc
+	left join register_info ri on r.uid_enc = ri.uid_enc
 	where psi.uid_enc is null
+	and ri.patient_type_code != 'PE' 
 	and r.report_status ='AUDITED' and r.uid_enc!='' and r.update_time > ?
 	and TIMESTAMPDIFF(MINUTE,r.update_time,NOW()) > 10
 	order by r.update_time DESC
 	limit ?;`
+
+	if global.ReadDBEngine.Ping() != nil {
+		global.Logger.Debug("数据库无效连接，重连数据库")
+		global.ReadDBEngine.Close()
+		global.ReadDBEngine, _ = NewDBEngine(global.DatabaseSetting)
+	}
+
 	rows, err := global.ReadDBEngine.Query(sql, global.ObjectSetting.Start_Time, global.ObjectSetting.Object_MaxTasks)
 	if err != nil {
 		global.Logger.Error(err)
@@ -34,10 +44,11 @@ func AutoGetObjectData() {
 	defer rows.Close()
 	for rows.Next() {
 		key := DBData{}
-		_ = rows.Scan(&key.uid_enc, &key.update_time)
+		_ = rows.Scan(&key.uid_enc, &key.update_time, &key.reg_uid_enc)
 		if key.uid_enc.String != "" {
 			data := global.ObjectData{
 				Uid_Enc:            key.uid_enc.String,
+				Reg_Uid_Enc:        key.reg_uid_enc.String,
 				Report_update_time: key.update_time.String,
 				Count:              1,
 			}
@@ -61,6 +72,11 @@ func Test() {
 func UpdateStatus(enc string, code int) {
 	global.Logger.Info("***开始跟新注册基本信息状态***")
 	sql := `update platform_share_info psi set psi.status = ? where psi.uid_enc = ?;`
+	if global.WriteDBEngine.Ping() != nil {
+		global.Logger.Debug("数据库无效连接，重连数据库")
+		global.WriteDBEngine.Close()
+		global.WriteDBEngine, _ = NewDBEngine(global.DatabaseSetting)
+	}
 	global.WriteDBEngine.Exec(sql, code, enc)
 }
 
@@ -68,6 +84,12 @@ func UpdateStatus(enc string, code int) {
 func UpdateFileUid(enc, cdaid, pdfid, kosid string) {
 	global.Logger.Info("***开始跟新文档唯一ID***")
 	sql := `update platform_share_info psi set psi.cda_uuid = ?,psi.pdf_uuid = ?,psi.kos_uuid = ? where psi.uid_enc = ?;`
+
+	if global.WriteDBEngine.Ping() != nil {
+		global.Logger.Debug("数据库无效连接，重连数据库")
+		global.WriteDBEngine.Close()
+		global.WriteDBEngine, _ = NewDBEngine(global.DatabaseSetting)
+	}
 	global.WriteDBEngine.Exec(sql, cdaid, pdfid, kosid, enc)
 }
 
@@ -75,31 +97,45 @@ func UpdateFileUid(enc, cdaid, pdfid, kosid string) {
 func InsertData(uidenc, updatetime string) {
 	global.Logger.Info("***开始在数据库中插入处理的数据***", uidenc)
 	sql := `insert into platform_share_info (uid_enc,report_update_time) values(?,?)`
+
+	if global.WriteDBEngine.Ping() != nil {
+		global.Logger.Debug("数据库无效连接，重连数据库")
+		global.WriteDBEngine.Close()
+		global.WriteDBEngine, _ = NewDBEngine(global.DatabaseSetting)
+	}
 	global.WriteDBEngine.Exec(sql, uidenc, updatetime)
 }
 
 // 获取患者基础信息
-func GetBasicInfo(uidenc, updatetime string) global.BasicPatientInfo {
+func GetBasicInfo(reguidenc, updatetime string) (global.BasicPatientInfo, error) {
 	obj := global.BasicPatientInfo{}
 	global.Logger.Info("***开始获取患者基本信息***")
 	sql := `select rp.name,rp.spell_name,rp.sex_code,rp.telephone,rp.address,rp.society_number,rp.id_card,rp.patient_number
-	from register_patient rp
-	inner join report r on r.patient_id = rp.patient_id
-	where r.uid_enc = ? limit 1;`
-	row := global.ReadDBEngine.QueryRow(sql, uidenc)
+	from register_patient rp where rp.register_uid_enc = ? limit 1;`
+
+	if global.ReadDBEngine.Ping() != nil {
+		global.Logger.Debug("数据库无效连接，重连数据库")
+		global.ReadDBEngine.Close()
+		global.ReadDBEngine, _ = NewDBEngine(global.DatabaseSetting)
+	}
+
+	row := global.ReadDBEngine.QueryRow(sql, reguidenc)
 	key := PatientBaseInfo{}
 	if err := row.Scan(&key.name, &key.spell_name, &key.sex_code, &key.telephone, &key.address, &key.society_number, &key.id_card, &key.patient_id); err != nil {
 		global.Logger.Error(err)
-		return obj
+		return obj, err
 	}
-	if key.name.String == "" || key.spell_name.String == "" || key.id_card.String == "" {
+	if key.id_card.String == "" {
 		global.Logger.Error("***患者基本信息有为空项***")
-		return obj
+		return obj, errors.New("身份证信息为空")
 	}
 	updatetime = strings.Replace(updatetime, "-", "", -1)
 	updatetime = strings.Replace(updatetime, ":", "", -1)
 	updatetime = strings.Replace(updatetime, " ", "", -1)
-	brith := key.id_card.String[6:14]
+	var brith string
+	if key.id_card.String != "" {
+		brith = key.id_card.String[6:14]
+	}
 	gender := ""
 	switch global.ObjectSetting.Object_SelectPlatForm {
 	case global.PlatFormLaiDa:
@@ -146,7 +182,7 @@ func GetBasicInfo(uidenc, updatetime string) global.BasicPatientInfo {
 		PatientID:                key.patient_id.String,
 		CreationTime:             updatetime,
 	}
-	return obj
+	return obj, nil
 }
 
 // 获取患者报告相关信息
@@ -162,6 +198,13 @@ func GetReportInfo(uidenc string) global.PatientReportInfo {
 	left join study s on r.uid_enc = s.uid_enc
 	left join register_info_relation rir on rir.register_uid_enc = r.uid_enc
 	where r.uid_enc = ?;`
+
+	if global.ReadDBEngine.Ping() != nil {
+		global.Logger.Debug("数据库无效连接，重连数据库")
+		global.ReadDBEngine.Close()
+		global.ReadDBEngine, _ = NewDBEngine(global.DatabaseSetting)
+	}
+
 	row := global.ReadDBEngine.QueryRow(sql, uidenc)
 	key := ReportInfo{}
 	if err := row.Scan(&key.accession_number, &key.study_instance_uid, &key.clinic_id, &key.his_sn, &key.patient_type_code, &key.apply_department_name, &key.apply_doctor_name,
@@ -196,6 +239,8 @@ func GetReportInfo(uidenc string) global.PatientReportInfo {
 			modalityname = "1"
 		case "DR":
 			modalityname = "2"
+		case "DX":
+			modalityname = "2"
 		case "CT":
 			modalityname = "3"
 		case "MR":
@@ -215,7 +260,6 @@ func GetReportInfo(uidenc string) global.PatientReportInfo {
 		default:
 			modalityname = "99"
 		}
-	case global.PlatFormMingTian:
 	}
 
 	studytime := key.study_time.String
@@ -305,6 +349,11 @@ func GetImagePath(uidenc string) []string {
 	left join study s on s.study_key = ins.study_key
 	left join study_location sl on s.location_code = sl.n_station_code
 	where s.uid_enc = ?;`
+	if global.ReadDBEngine.Ping() != nil {
+		global.Logger.Debug("数据库无效连接，重连数据库")
+		global.ReadDBEngine.Close()
+		global.ReadDBEngine, _ = NewDBEngine(global.DatabaseSetting)
+	}
 	rows, err := global.ReadDBEngine.Query(sql, uidenc)
 	if err != nil {
 		global.Logger.Error(err)
@@ -336,6 +385,11 @@ func GetPDFFilePath(uidenc string) string {
 	sql := `select pf.file_name,sl.ip,sl.s_virtual_dir from pdf_file pf
 	left join study_location sl on pf.localtion_code = sl.n_station_code
 	where pf.report_id = ?;`
+	if global.ReadDBEngine.Ping() != nil {
+		global.Logger.Debug("数据库无效连接，重连数据库")
+		global.ReadDBEngine.Close()
+		global.ReadDBEngine, _ = NewDBEngine(global.DatabaseSetting)
+	}
 	row := global.ReadDBEngine.QueryRow(sql, uidenc)
 	if err := row.Scan(&filename, &ip, &s_virtual_dir); err != nil {
 		global.Logger.Error(err)
@@ -352,6 +406,11 @@ func GetCheckItem(checkItem string) (code, name string) {
 	global.Logger.Info("***获取互认检查项目***")
 	sql := `SELECT dic.standard_check_item,dic.standard_check_item_code FROM dict_checkitem dic
 	WHERE dic.pacs_check_item = ?;`
+	if global.ReadDBEngine.Ping() != nil {
+		global.Logger.Debug("数据库无效连接，重连数据库")
+		global.ReadDBEngine.Close()
+		global.ReadDBEngine, _ = NewDBEngine(global.DatabaseSetting)
+	}
 	row := global.ReadDBEngine.QueryRow(sql, checkItem)
 	if err := row.Scan(&name, &code); err != nil {
 		global.Logger.Error(err)

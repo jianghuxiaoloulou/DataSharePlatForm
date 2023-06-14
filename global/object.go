@@ -6,7 +6,8 @@ const (
 )
 
 type ObjectData struct {
-	Uid_Enc            string // 患者唯一ID
+	Uid_Enc            string // 检查单ID
+	Reg_Uid_Enc        string // 申请单ID
 	Report_update_time string
 	Count              int // 执行次数
 }

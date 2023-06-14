@@ -11,6 +11,7 @@ import (
 // 任务数据
 type DBData struct {
 	uid_enc     sql.NullString // 患者唯一id
+	reg_uid_enc sql.NullString // 申请单ID
 	update_time sql.NullString // 报告更新时间
 }
 

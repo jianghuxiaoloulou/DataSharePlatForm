@@ -93,10 +93,15 @@ func RemoveDuplicate(arr []string) []string {
 func File2Base64(file string) string {
 	f, err := os.Open(file)
 	if err != nil {
+		fmt.Errorf(err.Error())
 		return ""
 	}
 
-	bytedata, _ := ioutil.ReadAll(f)
+	bytedata, err := ioutil.ReadAll(f)
+	if err != nil {
+		fmt.Errorf(err.Error())
+		return ""
+	}
 	encodeString := base64.StdEncoding.EncodeToString(bytedata)
 	return encodeString
 }

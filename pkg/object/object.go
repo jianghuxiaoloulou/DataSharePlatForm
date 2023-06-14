@@ -37,7 +37,12 @@ func PlatFormLaiDaWork(obj *global.ObjectData) {
 	// 将认证的数据插入数据库
 	model.InsertData(obj.Uid_Enc, obj.Report_update_time)
 	// 获取患者基本信息
-	baseInfo := model.GetBasicInfo(obj.Uid_Enc, obj.Report_update_time)
+	baseInfo, err := model.GetBasicInfo(obj.Reg_Uid_Enc, obj.Report_update_time)
+	if err != nil {
+		global.Logger.Error(err)
+		global.Logger.Error("身份证数据为空,数据不上传")
+		// return
+	}
 	global.Logger.Debug("***患者基本信息***", baseInfo)
 	// 1.注册患者基本信息
 	global.Logger.Info("***1.注册患者基本信息***")
@@ -106,7 +111,7 @@ func PlatFormLaiDaWork(obj *global.ObjectData) {
 	}
 	// 拷贝KOS文档
 	destkos := "./storage/kos/" + obj.Uid_Enc + ".kos"
-	_, err := general.CopyFile(kosfile, destkos)
+	_, err = general.CopyFile(kosfile, destkos)
 	if err == nil {
 		os.Remove(kosfile)
 	}
@@ -158,7 +163,12 @@ func PlatFormMingTianWork(obj *global.ObjectData) {
 	// 将认证的数据插入数据库
 	model.InsertData(obj.Uid_Enc, obj.Report_update_time)
 	// 1.获取患者基本信息
-	baseInfo := model.GetBasicInfo(obj.Uid_Enc, obj.Report_update_time)
+	baseInfo, err := model.GetBasicInfo(obj.Reg_Uid_Enc, obj.Report_update_time)
+	if err != nil {
+		global.Logger.Error(err)
+		global.Logger.Error("身份证数据为空,数据不上传")
+		return
+	}
 	global.Logger.Debug("***患者基本信息***", baseInfo)
 	// 2.获取报告信息
 	reportInfo := model.GetReportInfo(obj.Uid_Enc)
@@ -184,7 +194,10 @@ func PlatFormMingTianWork(obj *global.ObjectData) {
 	}
 	global.Logger.Info(DocInfo)
 
-	reqBody, _ := WritePatientRegistryAddXML_MingTian(DocInfo)
+	reqBody, err := WritePatientRegistryAddXML_MingTian(DocInfo)
+	if err != nil {
+		global.Logger.Error(err)
+	}
 	soapResult := CallSoap11(global.ObjectSetting.Object_ExamInfoWithFile, reqBody)
 
 	global.Logger.Info("获取平台返回结果：soapResult: ", soapResult)
@@ -1546,7 +1559,10 @@ func WriteProvideAndRegisterDocumentSetXML(obj global.DocInfo) (reqbody string, 
 // 明天医网检查数据上传
 func WritePatientRegistryAddXML_MingTian(obj global.DocInfo) (reqbody string, err error) {
 
-	mExamInfoWithFile, _ := CreateCDATAData(obj)
+	mExamInfoWithFile, err := CreateCDATAData(obj)
+	if err != nil {
+		global.Logger.Error("创建CDATA数据错误")
+	}
 
 	doc := etree.NewDocument()
 	// doc.CreateProcInst("xml", `version="1.0" encoding="UTF-8"`)
